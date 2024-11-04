@@ -9,7 +9,7 @@ import Foundation
 
 public extension Decodable {
     // Generic initializer that decodes any Decodable type from a [String: Any] dictionary
-    init?(from dictionary: [String: Any]?) {
+    public init?(from dictionary: [String: Any]?) {
         guard let dictionary = dictionary else { return nil }
 
         do {

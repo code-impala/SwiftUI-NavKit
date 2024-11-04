@@ -10,7 +10,7 @@ import SwiftUI
 public class EnvironmentObjectInjector<Object: ObservableObject>: AnyEnvironmentObject {
     let object: Object
 
-    init(_ object: Object) {
+    public init(_ object: Object) {
         self.object = object
     }
 

@@ -8,8 +8,8 @@
 import SwiftUI
 import UIKit
 
-class Router {
-    static let shared = Router()
+public class Router {
+    public static let shared = Router()
 
     private var navigationController: UINavigationController?
     private var resolver: RouteResolver
@@ -24,17 +24,17 @@ class Router {
     }
 
     // Allows setting a new resolver
-    func setResolver(_ newResolver: RouteResolver) {
+    public func setResolver(_ newResolver: RouteResolver) {
         self.resolver = newResolver
     }
 
     // Register environment objects that will be applied to all views in this navigation stack
-    func setEnvironmentObjects(_ objects: [AnyEnvironmentObject]) {
+    public func setEnvironmentObjects(_ objects: [AnyEnvironmentObject]) {
         self.environmentObjects = objects
     }
 
     // Navigate using a Route (inject environment objects automatically)
-    func navigate(to route: Route) {
+    public func navigate(to route: Route) {
         guard let view = resolver.resolveView(for: route.path, parameters: route.parameters, environmentObjects: route.getEnvironmentObjects()) else {
             print("Error: No view found for route \(route.path)")
             return
@@ -52,7 +52,7 @@ class Router {
     }
 
     // Navigate using a concrete path and optional Codable parameters
-    func navigate<T: Codable>(to path: String, with parameters: T? = nil) {
+    public func navigate<T: Codable>(to path: String, with parameters: T? = nil) {
         if let parameters = parameters {
             // Convert Codable to a dictionary
             guard let paramsDict = try? parameters.asDictionary() else {
@@ -66,7 +66,7 @@ class Router {
     }
 
     // Navigate using deep link parameters
-    func navigate(to path: String, with parameters: [String: Any]? = nil) {
+    public func navigate(to path: String, with parameters: [String: Any]? = nil) {
         guard let view = resolver.resolveView(for: path, parameters: parameters, environmentObjects: []) else {
             print("Error: No view found for route \(path)")
             return
@@ -83,7 +83,7 @@ class Router {
     }
 
     // Present modal flow using a Route (with environment objects)
-    func presentModalFlow(to route: Route, animated: Bool = true) {
+    public func presentModalFlow(to route: Route, animated: Bool = true) {
         guard let view = resolver.resolveView(for: route.path, parameters: route.parameters, environmentObjects: route.getEnvironmentObjects()) else {
             print("Error: No view found for route \(route.path)")
             return
@@ -97,7 +97,7 @@ class Router {
     }
 
     // Present modal flow using deep link parameters
-    func presentModalFlow(to path: String, with parameters: [String: Any]? = nil, animated: Bool = true) {
+    public func presentModalFlow(to path: String, with parameters: [String: Any]? = nil, animated: Bool = true) {
         guard let view = resolver.resolveView(for: path, parameters: parameters, environmentObjects: []) else {
             print("Error: No view found for route \(path)")
             return

@@ -8,7 +8,7 @@
 import UIKit
 
 extension UIApplication {
-    func getKeyWindow() -> UIWindow? {
+    public func getKeyWindow() -> UIWindow? {
         // Iterate through all scenes
         return self.connectedScenes
             .compactMap { $0 as? UIWindowScene }    // Get all window scenes

@@ -8,18 +8,19 @@
 import SwiftUI
 import UIKit
 
-class StandardRouteResolver: RouteResolver {
+public class StandardRouteResolver: RouteResolver {
+    public init() {}
     private var routes: [String: ([String: Any]?) -> AnyView] = [:]  // Returns AnyView (SwiftUI View)
 
     // Register a SwiftUI view with optional parameters
-    func registerRoute<V: View>(_ path: String, view: @escaping ([String: Any]?) -> V) {
+    public func registerRoute<V: View>(_ path: String, view: @escaping ([String: Any]?) -> V) {
         routes[path] = { parameters in
             AnyView(view(parameters))  // Wrap the SwiftUI View in AnyView
         }
     }
 
     // Resolve the view for a given route, with environment object injection
-    func resolveView(for path: String, parameters: [String: Any]? = nil, environmentObjects: [AnyEnvironmentObject]) -> AnyView? {
+    public func resolveView(for path: String, parameters: [String: Any]? = nil, environmentObjects: [AnyEnvironmentObject]) -> AnyView? {
         guard let viewBuilder = routes[path] else { return nil }
 
         let view = viewBuilder(parameters)
