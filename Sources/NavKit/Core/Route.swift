@@ -8,8 +8,7 @@
 import Foundation
 
 public protocol Route {
-    var path: String { get }
-    var parameters: [String: Any]? { get }  // Optional parameters
+    var routeConfig: RouteConfig { get }
     func withEnvironmentObject(_ object: AnyEnvironmentObject) -> Route
     func withEnvironmentObject<Object: ObservableObject>(_ object: Object) -> Route
     func getEnvironmentObjects() -> [AnyEnvironmentObject]

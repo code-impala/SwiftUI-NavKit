@@ -10,12 +10,12 @@ import UIKit
 
 public class Router {
     public static let shared = Router()
-
-    private var navigationController: UINavigationController?
+    private var stackManager = NavigationStackManager()
     private var resolver: RouteResolver
-    private var environmentObjects: [AnyEnvironmentObject] = []  // Store environment objects for reuse
-    public var navigationStack: [String]? {
-        activeNavigationController()?.getBackStack()
+    private var environmentObjects: [AnyEnvironmentObject] = []
+    
+    public var stackOrder: [UUID] {
+        stackManager.stackOrder.values()
     }
 
     // Initialize with a default resolver
@@ -23,180 +23,182 @@ public class Router {
         self.resolver = resolver
     }
 
-    // Allows setting a new resolver
+    // Set a new route resolver
     public func setResolver(_ newResolver: RouteResolver) {
         self.resolver = newResolver
     }
 
-    // Register environment objects that will be applied to all views in this navigation stack
+    // Register environment objects
     public func setEnvironmentObjects(_ objects: [AnyEnvironmentObject]) {
         self.environmentObjects = objects
     }
 
-    // Navigate using a Route (inject environment objects automatically)
-    public func navigate(to route: Route) {
-        guard let view = resolver.resolveView(for: route.path, parameters: route.parameters, environmentObjects: route.getEnvironmentObjects()) else {
-            print("Error: No view found for route \(route.path)")
-            return
-        }
-
-        // Inject stored environment objects
-        let viewWithEnvironment = injectEnvironmentObjects(into: view)
-
-        // Push the SwiftUI view with environment objects to the navigation stack
-        if navigationController == nil {
-            setupRootHostingController(with: viewWithEnvironment, screenType: route.path)
-        } else {
-            pushHostingController(with: viewWithEnvironment, screenType: route.path)
-        }
+    // Return the main stack UUID for reference
+    public func mainStackUUID() -> UUID {
+        return stackManager.mainStackUUID()
     }
 
-    // Navigate using a concrete path and optional Codable parameters
-    public func navigate<T: Codable>(to path: String, with parameters: T? = nil) {
-        if let parameters = parameters {
-            // Convert Codable to a dictionary
-            guard let paramsDict = try? parameters.asDictionary() else {
-                print("Error: Failed to convert parameters to dictionary")
-                return
-            }
-            navigate(to: path, with: paramsDict)
-        } else {
-            navigate(to: path, with: nil)
-        }
+    // Return the active stack UUID for reference
+    public func activeStackUUID() -> UUID {
+        return stackManager.activeStackUUID()
     }
 
-    // Navigate using deep link parameters
-    public func navigate(to path: String, with parameters: [String: Any]? = nil) {
-        guard let view = resolver.resolveView(for: path, parameters: parameters, environmentObjects: []) else {
-            print("Error: No view found for route \(path)")
-            return
-        }
-
-        // Inject stored environment objects
-        let viewWithEnvironment = injectEnvironmentObjects(into: view)
-
-        if navigationController == nil {
-            setupRootHostingController(with: viewWithEnvironment, screenType: path)
-        } else {
-            pushHostingController(with: viewWithEnvironment, screenType: path)
-        }
+    // Set the active stack by UUID
+    public func setActiveStack(_ stackID: UUID) {
+        stackManager.setActiveStack(stackID)
     }
 
-    // Present modal flow using a Route (with environment objects)
-    public func presentModalFlow(to route: Route, animated: Bool = true) {
-        guard let view = resolver.resolveView(for: route.path, parameters: route.parameters, environmentObjects: route.getEnvironmentObjects()) else {
-            print("Error: No view found for route \(route.path)")
-            return
-        }
-
-        let viewWithEnvironment = injectEnvironmentObjects(into: view)
-        let modalNavigationController = UINavigationController(
-            rootViewController: IdentifiableHostingController(rootView: viewWithEnvironment, screenType: route.path)
-        )
-        activeNavigationController()?.present(modalNavigationController, animated: animated)
+    // Create a new stack and return its UUID without setting it active
+    public func createNavigationStack() -> UUID {
+        return stackManager.createNavigationStack()
     }
-
-    // Present modal flow using deep link parameters
-    public func presentModalFlow(to path: String, with parameters: [String: Any]? = nil, animated: Bool = true) {
-        guard let view = resolver.resolveView(for: path, parameters: parameters, environmentObjects: []) else {
-            print("Error: No view found for route \(path)")
-            return
-        }
-
-        let viewWithEnvironment = injectEnvironmentObjects(into: view)
-        let modalNavigationController = UINavigationController(
-            rootViewController: IdentifiableHostingController(rootView: viewWithEnvironment, screenType: path)
-        )
-        activeNavigationController()?.present(modalNavigationController, animated: animated)
-    }
-
-    // Inject stored environment objects into the SwiftUI view
-    private func injectEnvironmentObjects<V: View>(into view: V) -> AnyView {
-        var modifiedView: AnyView = AnyView(view)
-
-        // Apply each stored environment object
-        environmentObjects.forEach { injector in
-            modifiedView = injector.injectEnvironmentObject(into: modifiedView)
-        }
-
-        return modifiedView
-    }
-
-    // Helper function to push a SwiftUI view wrapped in an IdentifiableHostingController to the navigation stack
-    private func pushHostingController(with view: some View, screenType: String) {
-        let hostingController = IdentifiableHostingController(rootView: AnyView(view), screenType: screenType)
-        activeNavigationController()?.pushViewController(hostingController, animated: true)
-    }
-
-    // Set up the root hosting controller with environment objects
-    private func setupRootHostingController(with rootView: some View, screenType: String) {
-        let navigationController = UINavigationController()
-        let hostingController = IdentifiableHostingController(rootView: AnyView(rootView), screenType: screenType)
-        navigationController.viewControllers = [hostingController]
-
-        self.navigationController = navigationController
-        setRootViewController(navigationController)
-    }
-
-    // Set up the root window with the provided view and environment objects
+    
     public func setupRootWindow(with windowScene: UIWindowScene, initialRoute: Route) -> UIWindow? {
         let window = UIWindow(windowScene: windowScene)
-
+        
         // Resolve the initial view using the route
-        guard let view = resolver.resolveView(for: initialRoute.path, parameters: initialRoute.parameters, environmentObjects: initialRoute.getEnvironmentObjects()) else {
-            print("Error: No view found for route \(initialRoute.path)")
+        guard let view = resolver.resolveView(for: initialRoute.routeConfig, environmentObjects: initialRoute.getEnvironmentObjects()) else {
+            print("Error: No view found for route \(initialRoute.routeConfig.path)")
             return nil
         }
-
-        // Inject environment objects into the initial view
+        
+        // Inject environment objects into the resolved view
         let viewWithEnvironment = injectEnvironmentObjects(into: view)
-
-        // Set up the navigation controller and assign the root view
-        let navigationController = UINavigationController()
-        let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: initialRoute.path)
-        navigationController.viewControllers = [hostingController]
-
-        // Assign the window's rootViewController and make it visible
-        window.rootViewController = navigationController
+        
+        // Retrieve the main stack's navigation controller
+        guard let mainNavigationController = stackManager.navigationController(for: mainStackUUID()) else {
+            print("Error: Main navigation controller not found")
+            return nil
+        }
+        
+        // Set the initial view controller for the main stack
+        let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: initialRoute.routeConfig.path)
+        mainNavigationController.viewControllers = [hostingController]
+        
+        // Set the root view controller of the window and make it visible
+        window.rootViewController = mainNavigationController
         window.makeKeyAndVisible()
-
-        // Store the window and navigationController
-        self.navigationController = navigationController
+        
         return window
     }
     
-    public func navigateBack(steps: Int = 1) {
-        activeNavigationController()?.popBack(steps: steps)
-    }
-    
-    public func navigateToRoot() {
-        activeNavigationController()?.popToRootViewController(animated: true)
-    }
-    
-    public func navigateBackTo(path: String) {
-        activeNavigationController()?.popToScreen(path)
-    }
-    
-    public func navigateBackTo(screen: Route) {
-        activeNavigationController()?.popToScreen(screen.path)
-    }
-
-    // Set the root window's root view controller
-    private func setRootViewController(_ rootViewController: UIViewController) {
-        guard let window = UIApplication.shared.getKeyWindow() else {
-            print("Error: No window available")
+    // Navigate to a route in the specified stack, defaulting to the active stack if no UUID is provided
+    public func navigate(to route: Route, inStack stackID: UUID? = nil) {
+        // Resolve the view based on the provided route
+        guard let view = resolver.resolveView(for: route.routeConfig, environmentObjects: route.getEnvironmentObjects()) else {
+            print("Error: No view found for route \(route.routeConfig.path)")
             return
         }
-        window.rootViewController = rootViewController
-        window.makeKeyAndVisible()
+
+        // Inject environment objects into the resolved view
+        let viewWithEnvironment = injectEnvironmentObjects(into: view)
+
+        // Retrieve the navigation controller, defaulting to the active stack
+        if let navigationController = stackManager.navigationController(for: stackID) {
+            pushHostingController(with: viewWithEnvironment, screenType: route.routeConfig.path, in: navigationController)
+        } else {
+            print("Error: Navigation stack not found")
+        }
     }
 
-    // Helper method to get the active UINavigationController
-    private func activeNavigationController() -> UINavigationController? {
-        var activeNavController = navigationController
-        while let presentedController = activeNavController?.presentedViewController as? UINavigationController {
-            activeNavController = presentedController
+    public func presentModalFlow(to route: Route, animated: Bool = true) -> UUID? {
+        guard let view = resolver.resolveView(for: route.routeConfig, environmentObjects: route.getEnvironmentObjects()) else {
+            print("Error: No view found for route \(route.routeConfig.path)")
+            return nil
         }
-        return activeNavController
+
+        let viewWithEnvironment = injectEnvironmentObjects(into: view)
+        let modalStackID = stackManager.createNavigationStack()
+
+        guard let modalNavigationController = stackManager.navigationController(for: modalStackID) else {
+            print("Error: Failed to create modal navigation controller.")
+            return nil
+        }
+
+        // Set up the hosting controller with a dismiss handler
+        let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: route.routeConfig.path)
+        hostingController.onDismiss = { [weak self] in
+            self?.stackManager.cleanupStack(from: modalStackID)
+            print("Modal dismissed for stack ID: \(modalStackID)")
+        }
+
+        modalNavigationController.viewControllers = [hostingController]
+
+        // Set the presentationController delegate on modalNavigationController
+        modalNavigationController.presentationController?.delegate = modalNavigationController
+
+        // Present the modal from the active stack or fallback to the main stack
+        guard let presentingController = stackManager.navigationController(for: nil) ?? stackManager.navigationController(for: stackManager.mainStackUUID()) else {
+            print("Error: No active navigation controller found for presenting.")
+            return nil
+        }
+
+        presentingController.present(modalNavigationController, animated: animated) {
+            self.stackManager.setActiveStack(modalStackID)
+        }
+        
+        return modalStackID
+    }
+
+    // Pop view controllers in the specified stack, defaulting to the active stack if no UUID is provided
+    public func pop(inStack stackID: UUID? = nil, steps: Int = 1, animated: Bool = true) {
+        // Retrieve the navigation controller for the specified or active stack
+        guard let navigationController = stackManager.navigationController(for: stackID) else {
+            print("Error: Navigation stack not found")
+            return
+        }
+        
+        let totalViewControllers = navigationController.viewControllers.count
+        let targetIndex = totalViewControllers - steps - 1
+        
+        // Ensure target index is within bounds
+        guard targetIndex >= 0 else {
+            print("Error: Not enough view controllers in the stack to pop \(steps) steps.")
+            return
+        }
+        
+        let targetViewController = navigationController.viewControllers[targetIndex]
+        navigationController.popToViewController(targetViewController, animated: animated)
+    }
+    
+    public func popToRoot(inStack stackID: UUID? = nil, animated: Bool = true) {
+        guard let navigationController = stackManager.navigationController(for: stackID) else {
+            print("Error: Navigation stack not found")
+            return
+        }
+        navigationController.popToRootViewController(animated: animated)
+    }
+    
+    public func popToViewController(ofType type: UIViewController.Type, inStack stackID: UUID? = nil, animated: Bool = true) {
+        guard let navigationController = stackManager.navigationController(for: stackID) else {
+            print("Error: Navigation stack not found")
+            return
+        }
+        
+        if let targetViewController = navigationController.viewControllers.first(where: { $0.isKind(of: type) }) {
+            navigationController.popToViewController(targetViewController, animated: animated)
+        } else {
+            print("Error: No view controller of type \(type) found in the stack.")
+        }
+    }
+    
+    // Dismiss a modal stack by its UUID, and reset active stack if needed
+    public func dismissModalStack(withID stackID: UUID? = nil, animated: Bool = true) {
+        stackManager.dismissStack(withID: stackID ?? stackManager.activeStackUUID(), animated: animated)
+    }
+
+    // Inject environment objects into the SwiftUI view
+    private func injectEnvironmentObjects<V: View>(into view: V) -> AnyView {
+        var modifiedView: AnyView = AnyView(view)
+        environmentObjects.forEach { injector in
+            modifiedView = injector.injectEnvironmentObject(into: modifiedView)
+        }
+        return modifiedView
+    }
+
+    // Push view controller onto the specified navigation controller
+    private func pushHostingController(with view: some View, screenType: String, in navigationController: UINavigationController) {
+        let hostingController = IdentifiableHostingController(rootView: AnyView(view), screenType: screenType)
+        navigationController.pushViewController(hostingController, animated: true)
     }
 }

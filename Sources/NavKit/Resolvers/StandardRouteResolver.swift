@@ -9,37 +9,27 @@ import SwiftUI
 import UIKit
 
 public class StandardRouteResolver: RouteResolver {
+    private var routeHandler: ((RouteConfig) -> AnyView)?
+    
     public init() {}
-    private var routes: [String: ([String: Any]?) -> AnyView] = [:]  // Returns AnyView (SwiftUI View)
-
-    // Register a SwiftUI view with optional parameters
-    public func registerRoute<V: View>(_ path: String, view: @escaping ([String: Any]?) -> V) {
-        routes[path] = { parameters in
-            AnyView(view(parameters))  // Wrap the SwiftUI View in AnyView
-        }
+    
+    // Register all routes with a single closure that returns some View
+    public func registerRoutes(_ handler: @escaping (RouteConfig) -> AnyView) {
+        routeHandler = { route in handler(route) }
     }
-
-    // Resolve the view for a given route, with environment object injection
-    public func resolveView(for path: String, parameters: [String: Any]? = nil, environmentObjects: [AnyEnvironmentObject]) -> AnyView? {
-        guard let viewBuilder = routes[path] else { return nil }
-
-        let view = viewBuilder(parameters)
-
-        // Inject environment objects before returning the view
-        let injectedView = injectEnvironmentObjects(into: view, with: environmentObjects)
-
-        return injectedView
+    
+    // Resolve a view by passing the route to the registered handler and converting to AnyView
+    public func resolveView(for route: RouteConfig, environmentObjects: [AnyEnvironmentObject]) -> AnyView? {
+        guard let view = routeHandler?(route) else { return nil }
+        return injectEnvironmentObjects(view, with: environmentObjects)
     }
-
+    
     // Helper function to inject environment objects into the SwiftUI view
-    private func injectEnvironmentObjects<V: View>(into view: V, with objects: [AnyEnvironmentObject]) -> AnyView {
-        var modifiedView: AnyView = AnyView(view)
-
-        // Apply each environment object
+    private func injectEnvironmentObjects(_ view: AnyView, with objects: [AnyEnvironmentObject]) -> AnyView {
+        var modifiedView = view
         objects.forEach { injector in
             modifiedView = injector.injectEnvironmentObject(into: modifiedView)
         }
-
         return modifiedView
     }
 }

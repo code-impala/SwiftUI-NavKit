@@ -9,21 +9,16 @@ import Foundation
 
 public class AppRoute: Route {
     private var environmentObjects: [AnyEnvironmentObject] = []
-    private let route: RouteConfig
+    public let routeConfig: any RouteConfig
     
     // Initialize with any developer-defined RouteConfig
-    public init(route: RouteConfig) {
-        self.route = route
+    public init(routeConfig: RouteConfig) {
+        self.routeConfig = routeConfig
     }
     
     // Path of the route, sourced from the developer's RouteConfig
     public var path: String {
-        return route.path
-    }
-    
-    // Optional parameters for the route, sourced from the developer's RouteConfig
-    public var parameters: [String: Any]? {
-        return route.parameters
+        return routeConfig.path
     }
     
     // Add an environment object to this route instance (accepts AnyEnvironmentObject)

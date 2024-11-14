@@ -6,13 +6,18 @@
 //
 
 import SwiftUI
+import UIKit
 
-class IdentifiableHostingController<Content: View>: UIHostingController<Content>, ScreenIdentifiable {
-    var screenType: String?
+class IdentifiableHostingController<Content: View>: UIHostingController<Content> {
+    var onDismiss: (() -> Void)?
+    private var screenType: String
     
-    init(rootView: Content, screenType: String?) {
+    init(rootView: Content, screenType: String) {
         self.screenType = screenType
         super.init(rootView: rootView)
+        
+        self.modalPresentationStyle = .pageSheet
+        self.isModalInPresentation = false // Allow swipe-to-dismiss
     }
     
     @objc required dynamic init?(coder aDecoder: NSCoder) {

@@ -5,6 +5,7 @@
 //  Created by Code Impala on 04/11/24.
 //
 
+import SwiftUI
 import UIKit
 
 extension UINavigationController {
@@ -36,5 +37,14 @@ extension UINavigationController {
         
         let targetViewController = viewControllers[targetIndex]
         popToViewController(targetViewController, animated: animated)
+    }
+}
+
+extension UINavigationController: UIAdaptivePresentationControllerDelegate {
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        if let hostingController = viewControllers.first as? IdentifiableHostingController<AnyView> {
+            hostingController.onDismiss?()
+            print("Dismissal detected in UINavigationController")
+        }
     }
 }

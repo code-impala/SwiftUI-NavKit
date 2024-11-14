@@ -10,7 +10,6 @@ import ObjectiveC
 
 public protocol RouteConfig {
     var path: String { get }
-    var parameters: [String: Any]? { get }
 }
 
 public extension RouteConfig {
@@ -39,7 +38,7 @@ public extension RouteConfig {
 
     // Method to generate the final AppRoute, injecting the stored environment objects
     func generateRoute() -> AppRoute {
-        let appRoute = AppRoute(route: self)
+        let appRoute = AppRoute(routeConfig: self)
         holder.environmentObjects.forEach { appRoute.withEnvironmentObject($0) }
         return appRoute
     }
