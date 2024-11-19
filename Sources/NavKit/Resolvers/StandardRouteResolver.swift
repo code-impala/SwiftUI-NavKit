@@ -9,22 +9,26 @@ import SwiftUI
 import UIKit
 
 public class StandardRouteResolver: RouteResolver {
-    private var routeHandler: ((RouteConfig) -> AnyView)?
+    private var routeHandlers: [RouteHandler] = []
     
     public init() {}
     
-    // Register all routes with a single closure that returns some View
-    public func registerRoutes(_ handler: @escaping (RouteConfig) -> AnyView) {
-        routeHandler = { route in handler(route) }
+    // Register route handlers for different modules
+    public func registerRouteHandler(_ handler: RouteHandler) {
+        routeHandlers.append(handler)
     }
     
-    // Resolve a view by passing the route to the registered handler and converting to AnyView
-    public func resolveView(for route: RouteConfig, environmentObjects: [AnyEnvironmentObject]) -> AnyView? {
-        guard let view = routeHandler?(route) else { return nil }
-        return injectEnvironmentObjects(view, with: environmentObjects)
+    // Resolve the view by delegating to registered handlers
+    public func resolveView(for route: RouteConfig) -> AnyView? {
+        for handler in routeHandlers {
+            if let view = handler.resolveView(for: route) {
+                return view
+            }
+        }
+        return nil // No handler found for the route
     }
     
-    // Helper function to inject environment objects into the SwiftUI view
+    // Inject environment objects into the view
     private func injectEnvironmentObjects(_ view: AnyView, with objects: [AnyEnvironmentObject]) -> AnyView {
         var modifiedView = view
         objects.forEach { injector in

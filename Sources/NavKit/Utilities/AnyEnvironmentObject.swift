@@ -9,4 +9,5 @@ import SwiftUI
 
 public protocol AnyEnvironmentObject {
     func injectEnvironmentObject<V: View>(into view: V) -> AnyView
+    var wrappedType: Any.Type { get } // Expose the type of the wrapped object
 }

@@ -22,16 +22,29 @@ public class Router {
     private init(resolver: RouteResolver = StandardRouteResolver()) {
         self.resolver = resolver
     }
+    
+    public func addEnvironmentObject(_ injector: AnyEnvironmentObject) {
+           addEnvironmentObjects([injector])
+       }
+    
+    private func addEnvironmentObjects(_ objects: [AnyEnvironmentObject]) {
+        for newObject in objects {
+            // Check if an object of the same type exists in the list
+            if let index = environmentObjects.firstIndex(where: { $0.wrappedType == newObject.wrappedType }) {
+                // Replace the existing object
+                environmentObjects[index] = newObject
+            } else {
+                // Add the new object if it doesn't exist
+                environmentObjects.append(newObject)
+            }
+        }
+    }
 
     // Set a new route resolver
     public func setResolver(_ newResolver: RouteResolver) {
         self.resolver = newResolver
     }
 
-    // Register environment objects
-    public func setEnvironmentObjects(_ objects: [AnyEnvironmentObject]) {
-        self.environmentObjects = objects
-    }
 
     // Return the main stack UUID for reference
     public func mainStackUUID() -> UUID {
@@ -53,39 +66,44 @@ public class Router {
         return stackManager.createNavigationStack()
     }
     
-    public func setupRootWindow(with windowScene: UIWindowScene, initialRoute: Route) -> UIWindow? {
-        let window = UIWindow(windowScene: windowScene)
-        
-        // Resolve the initial view using the route
-        guard let view = resolver.resolveView(for: initialRoute.routeConfig, environmentObjects: initialRoute.getEnvironmentObjects()) else {
-            print("Error: No view found for route \(initialRoute.routeConfig.path)")
-            return nil
+    public func getEnvironmentObjects() -> [AnyEnvironmentObject] {
+          return environmentObjects
+      }
+    
+    @discardableResult
+    public func setupRootWindow(with window: UIWindow, initialRoute: AppRoute) -> UINavigationController? {
+            // Synchronize environment objects from the route into the Router
+            let routeEnvironmentObjects = initialRoute.getEnvironmentObjects()
+            self.addEnvironmentObjects(routeEnvironmentObjects)
+
+            // Resolve the initial view using the route
+            guard let view = resolver.resolveView(for: initialRoute.routeConfig) else {
+                print("Error: No view found for route \(initialRoute.routeConfig.path)")
+                return nil
+            }
+
+            // Inject environment objects into the resolved view
+            let viewWithEnvironment = injectEnvironmentObjects(into: view)
+
+            guard let mainNavigationController = stackManager.navigationController(for: mainStackUUID()) else {
+                print("Error: Main navigation controller not found")
+                return nil
+            }
+
+            let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: initialRoute.routeConfig.path)
+            mainNavigationController.viewControllers = [hostingController]
+
+            window.rootViewController = mainNavigationController
+            window.makeKeyAndVisible()
+            return mainNavigationController
         }
-        
-        // Inject environment objects into the resolved view
-        let viewWithEnvironment = injectEnvironmentObjects(into: view)
-        
-        // Retrieve the main stack's navigation controller
-        guard let mainNavigationController = stackManager.navigationController(for: mainStackUUID()) else {
-            print("Error: Main navigation controller not found")
-            return nil
-        }
-        
-        // Set the initial view controller for the main stack
-        let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: initialRoute.routeConfig.path)
-        mainNavigationController.viewControllers = [hostingController]
-        
-        // Set the root view controller of the window and make it visible
-        window.rootViewController = mainNavigationController
-        window.makeKeyAndVisible()
-        
-        return window
-    }
     
     // Navigate to a route in the specified stack, defaulting to the active stack if no UUID is provided
-    public func navigate(to route: Route, inStack stackID: UUID? = nil) {
+    public func navigate(to route: Route, inStack stackID: UUID? = nil, clearBackStack: Bool = false) {
+        let routeEnvironmentObjects = route.getEnvironmentObjects()
+        self.addEnvironmentObjects(routeEnvironmentObjects)
         // Resolve the view based on the provided route
-        guard let view = resolver.resolveView(for: route.routeConfig, environmentObjects: route.getEnvironmentObjects()) else {
+        guard let view = resolver.resolveView(for: route.routeConfig) else {
             print("Error: No view found for route \(route.routeConfig.path)")
             return
         }
@@ -95,15 +113,27 @@ public class Router {
 
         // Retrieve the navigation controller, defaulting to the active stack
         if let navigationController = stackManager.navigationController(for: stackID) {
-            pushHostingController(with: viewWithEnvironment, screenType: route.routeConfig.path, in: navigationController)
+            if clearBackStack {
+                // Clear the back stack and set the new view as the root
+                setHostingControllerAsRoot(with: viewWithEnvironment, screenType: route.routeConfig.path, in: navigationController)
+            } else {
+                // Push the new view onto the existing navigation stack
+                pushHostingController(with: viewWithEnvironment, screenType: route.routeConfig.path, in: navigationController)
+            }
         } else {
             print("Error: Navigation stack not found")
         }
     }
+    
+    private func setHostingControllerAsRoot(with view: some View, screenType: String, in navigationController: UINavigationController) {
+        let hostingController = IdentifiableHostingController(rootView: AnyView(view), screenType: screenType)
+        navigationController.setViewControllers([hostingController], animated: false) // Clear back stack by setting only one view
+    }
+
 
     public func presentModalFlow(to route: Route, animated: Bool = true) -> UUID? {
-        guard let view = resolver.resolveView(for: route.routeConfig, environmentObjects: route.getEnvironmentObjects()) else {
-            print("Error: No view found for route \(route.routeConfig.path)")
+        guard let view = resolver.resolveView(for: route.routeConfig) else {
+            print("Error: No view found for route3 \(route.routeConfig.path)")
             return nil
         }
 

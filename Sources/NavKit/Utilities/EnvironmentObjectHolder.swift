@@ -9,5 +9,5 @@ import Foundation
 
 // Top-level class to hold environment objects temporarily
 public class EnvironmentObjectHolder {
-    var environmentObjects: [AnyEnvironmentObject] = []
+     var environmentObjects: [AnyEnvironmentObject] = []
 }

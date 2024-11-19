@@ -7,14 +7,18 @@
 
 import SwiftUI
 
-public class EnvironmentObjectInjector<Object: ObservableObject>: AnyEnvironmentObject {
+ class EnvironmentObjectInjector<Object: ObservableObject>: AnyEnvironmentObject {
     let object: Object
 
-    public init(_ object: Object) {
+     init(_ object: Object) {
         self.object = object
     }
 
-    public func injectEnvironmentObject<V: View>(into view: V) -> AnyView {
+     func injectEnvironmentObject<V: View>(into view: V) -> AnyView {
         return AnyView(view.environmentObject(object))
+    }
+
+     var wrappedType: Any.Type {
+        return Object.self
     }
 }

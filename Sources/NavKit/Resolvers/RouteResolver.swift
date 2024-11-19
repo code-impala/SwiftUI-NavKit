@@ -9,5 +9,5 @@ import SwiftUI
 
 public protocol RouteResolver {
     // This method resolves the view controller for a given path
-    func resolveView(for route: RouteConfig, environmentObjects: [AnyEnvironmentObject]) -> AnyView?
+    func resolveView(for route: RouteConfig) -> AnyView?
 }
