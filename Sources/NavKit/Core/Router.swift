@@ -125,6 +125,31 @@ public class Router {
         }
     }
     
+    public func dismissFullScreenCover(withID stackID: UUID? = nil, animated: Bool = true) {
+        // Get the stack ID to dismiss, defaulting to the active stack
+        let targetStackID = stackID ?? stackManager.activeStackUUID()
+
+        // Retrieve the navigation controller for the stack
+        guard let navigationController = stackManager.navigationController(for: targetStackID) else {
+            print("Error: Full-screen cover stack not found.")
+            return
+        }
+
+        // Ensure the navigation controller being dismissed was presented as a full-screen cover
+        guard navigationController.modalPresentationStyle == .overCurrentContext ||
+              navigationController.modalPresentationStyle == .fullScreen else {
+            print("Error: The stack is not a full-screen cover.")
+            return
+        }
+
+        // Dismiss the full-screen cover
+        navigationController.dismiss(animated: animated) {
+            self.stackManager.cleanupStack(from: targetStackID)
+            print("Full-screen cover dismissed for stack ID: \(targetStackID)")
+        }
+    }
+
+    
     private func setHostingControllerAsRoot(with view: some View, screenType: String, in navigationController: UINavigationController) {
         let hostingController = IdentifiableHostingController(rootView: AnyView(view), screenType: screenType)
         navigationController.setViewControllers([hostingController], animated: false) // Clear back stack by setting only one view
@@ -169,6 +194,71 @@ public class Router {
         
         return modalStackID
     }
+    
+    public func presentFullScreenCover(to route: Route, animated: Bool = true) -> UUID? {
+        // Resolve the view based on the provided route
+        guard let view = resolver.resolveView(for: route.routeConfig) else {
+            print("Error: No view found for route \(route.routeConfig.path)")
+            return nil
+        }
+
+        // Inject environment objects into the resolved view
+        let viewWithEnvironment = injectEnvironmentObjects(into: view)
+
+        // Create a new navigation stack for the full-screen cover
+        let fullScreenStackID = stackManager.createNavigationStack()
+
+        guard let fullScreenNavigationController = stackManager.navigationController(for: fullScreenStackID) else {
+            print("Error: Failed to create navigation controller for full-screen cover.")
+            return nil
+        }
+
+        // Set up the hosting controller for the full-screen view
+        let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: route.routeConfig.path)
+
+        // Add the hosting controller to the navigation stack
+        fullScreenNavigationController.viewControllers = [hostingController]
+
+        // Set the modal presentation style for the navigation controller
+        fullScreenNavigationController.modalPresentationStyle = .overCurrentContext
+
+        // Present the navigation controller as a full-screen cover
+        guard let presentingController = UIApplication.shared.windows.first?.rootViewController else {
+            print("Error: No root view controller found.")
+            return nil
+        }
+
+        presentingController.present(fullScreenNavigationController, animated: animated) {
+            self.stackManager.setActiveStack(fullScreenStackID)
+        }
+
+        return fullScreenStackID
+    }
+    
+    public func presentBottomSheet(to route: Route, inStack stackID: UUID? = nil) {
+        // Resolve the view based on the provided route
+        guard let view = resolver.resolveView(for: route.routeConfig) else {
+            print("Error: No view found for route \(route.routeConfig.path)")
+            return
+        }
+
+        // Inject environment objects into the resolved view
+        let viewWithEnvironment = injectEnvironmentObjects(into: view)
+
+        // Wrap the resolved view in a custom bottom sheet
+        let hostingController = UIHostingController(rootView: viewWithEnvironment)
+
+        // Present the bottom sheet
+        guard let presentingController = stackManager.navigationController(for: stackID) ??
+                                          stackManager.navigationController(for: stackManager.mainStackUUID()) ??
+                                          UIApplication.shared.windows.first?.rootViewController else {
+            print("Error: No active navigation controller or root view controller found.")
+            return
+        }
+        configureCustomBottomSheet(for: hostingController, in: presentingController)
+    }
+
+
 
     // Pop view controllers in the specified stack, defaulting to the active stack if no UUID is provided
     public func pop(inStack stackID: UUID? = nil, steps: Int = 1, animated: Bool = true) {
@@ -230,5 +320,13 @@ public class Router {
     private func pushHostingController(with view: some View, screenType: String, in navigationController: UINavigationController) {
         let hostingController = IdentifiableHostingController(rootView: AnyView(view), screenType: screenType)
         navigationController.pushViewController(hostingController, animated: true)
+    }
+    
+    private func configureCustomBottomSheet(for hostingController: UIHostingController<AnyView>, in presentingController: UIViewController, height: CGFloat = UIScreen.main.bounds.height * 0.5) {
+        let transitioningDelegate = BottomSheetTransitioningDelegate(height: height)
+        hostingController.modalPresentationStyle = .custom
+        hostingController.transitioningDelegate = transitioningDelegate
+
+        presentingController.present(hostingController, animated: true, completion: nil)
     }
 }
