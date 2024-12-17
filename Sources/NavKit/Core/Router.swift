@@ -155,8 +155,8 @@ public class Router {
         navigationController.setViewControllers([hostingController], animated: false) // Clear back stack by setting only one view
     }
 
-
-    public func presentModalFlow(to route: Route, animated: Bool = true) -> UUID? {
+    @discardableResult
+    public func presentModalFlow(to route: Route, animated: Bool = true, onDismiss: (() -> Void)? = nil) -> UUID? {
         guard let view = resolver.resolveView(for: route.routeConfig) else {
             print("Error: No view found for route3 \(route.routeConfig.path)")
             return nil
@@ -174,6 +174,7 @@ public class Router {
         let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: route.routeConfig.path)
         hostingController.onDismiss = { [weak self] in
             self?.stackManager.cleanupStack(from: modalStackID)
+            onDismiss?()
             print("Modal dismissed for stack ID: \(modalStackID)")
         }
 
@@ -195,7 +196,8 @@ public class Router {
         return modalStackID
     }
     
-    public func presentFullScreenCover(to route: Route, animated: Bool = true) -> UUID? {
+    @discardableResult
+    public func presentFullScreenCover(to route: Route, animated: Bool = true, onDismiss: (() -> Void)? = nil) -> UUID? {
         // Resolve the view based on the provided route
         guard let view = resolver.resolveView(for: route.routeConfig) else {
             print("Error: No view found for route \(route.routeConfig.path)")
@@ -215,6 +217,12 @@ public class Router {
 
         // Set up the hosting controller for the full-screen view
         let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: route.routeConfig.path)
+        
+        hostingController.onDismiss = { [weak self] in
+            self?.stackManager.cleanupStack(from: fullScreenStackID)
+            onDismiss?()
+            print("Fullscreen dismissed for stack ID: \(fullScreenStackID)")
+        }
 
         // Add the hosting controller to the navigation stack
         fullScreenNavigationController.viewControllers = [hostingController]
