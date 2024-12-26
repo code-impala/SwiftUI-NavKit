@@ -10,7 +10,7 @@ import UIKit
 
 class IdentifiableHostingController<Content: View>: UIHostingController<Content> {
     var onDismiss: (() -> Void)?
-    private var screenType: String
+    var screenType: String
     
     init(rootView: Content, screenType: String) {
         self.screenType = screenType

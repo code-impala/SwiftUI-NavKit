@@ -12,8 +12,15 @@ import UIKit
 class NavigationStackManager {
     private var mainStackID: UUID
     private var mainNavigationController: UINavigationController
-    private var navigationControllers: [UUID: UINavigationController]
-    private var activeStackID: UUID
+    var navigationControllers: [UUID: UINavigationController] {
+        didSet {
+            syncStackOrder()
+            if !navigationControllers.keys.contains(activeStackID) {
+                updateActiveStack()
+            }
+        }
+    }
+    private(set) var activeStackID: UUID
     var stackOrder: LinkedList<UUID>
 
     init() {
@@ -31,6 +38,10 @@ class NavigationStackManager {
         updateActiveStack()
         return activeStackID
     }
+    
+    func getNavigationController(stackId: UUID) -> UINavigationController? {
+        return navigationControllers[stackId]
+    }
 
     // Set active stack and update stack order in linked list
     func setActiveStack(_ stackID: UUID) {
@@ -39,7 +50,13 @@ class NavigationStackManager {
             return
         }
         activeStackID = stackID
-        stackOrder.append(stackID) 
+        if !stackOrder.contains(stackID) {
+            stackOrder.append(stackID)
+        }
+    }
+    
+    func addController(stackId: UUID, controller: UINavigationController) {
+        navigationControllers[stackId] = controller
     }
 
     // Create and return a new stack UUID without setting it as active
@@ -47,6 +64,7 @@ class NavigationStackManager {
         let stackID = UUID()
         let navigationController = UINavigationController()
         navigationControllers[stackID] = navigationController
+        print("debug --> stack created --> \(stackID)")
         return stackID
     }
 
@@ -54,44 +72,29 @@ class NavigationStackManager {
     func navigationController(for stackID: UUID?) -> UINavigationController? {
         navigationControllers[stackID ?? activeStackUUID()]
     }
-    
-    // Dismiss stack with cascading dismissal of subsequent modals
-    func dismissStack(withID stackID: UUID, animated: Bool = true) {
-        guard stackID != mainStackID, let stackToDismiss = navigationControllers[stackID] else {
-            print("Error: Cannot dismiss the main stack.")
-            return
+
+    // Sync the stackOrder with navigationControllers
+    private func syncStackOrder() {
+        let currentKeys = Set(navigationControllers.keys)
+        var node = stackOrder.node(at: 0)
+
+        // Remove nodes from stackOrder that no longer exist in navigationControllers
+        while let currentNode = node {
+            if !currentKeys.contains(currentNode.value) {
+                stackOrder.remove(from: currentNode.value)
+            }
+            node = currentNode.next
         }
-        
-        stackToDismiss.dismiss(animated: animated) {
-            self.cleanupStack(from: stackID)
+
+        // Add missing keys from navigationControllers to stackOrder
+        for key in navigationControllers.keys where !stackOrder.contains(key) {
+            stackOrder.append(key)
         }
     }
 
-    // Clean up the stack from the dismissed node and onward
-    func cleanupStack(from stackID: UUID) {
-        // Identify the starting node for cleanup in stackOrder
-        guard let startNodeIndex = stackOrder.values().firstIndex(of: stackID) else {
-            print("Error: Stack ID not found in stack order.")
-            return
-        }
-        
-        // Cascade dismissal for all nodes starting from the specified stackID
-        var currentNode = stackOrder.node(at: startNodeIndex)
-        while let node = currentNode {
-            if let navController = navigationControllers[node.value] {
-                navController.dismiss(animated: false) // Dismiss without animation to avoid conflicts
-                navigationControllers.removeValue(forKey: node.value)
-            }
-            currentNode = node.next // Move to the next node
-        }
-        
-        // Remove from stackOrder starting from the given stackID
-        stackOrder.remove(from: stackID)
-        
-        // Update active stack if the removed stack was the active one
-        if stackID == activeStackID {
-            updateActiveStack()
-        }
+    func removeStack(withID stackID: UUID) {
+        navigationControllers.removeValue(forKey: stackID)
+        print("Stack with ID \(stackID) has been removed.")
     }
 
     // Update active stack based on the topmost navigation controller in the view hierarchy
