@@ -12,6 +12,7 @@ public class Router {
     public static let shared = Router()
     private var stackManager = NavigationStackManager()
     private var resolver: RouteResolver
+    private let navigationDelegate = RouterNavigationDelegate()
     private var environmentObjects: [AnyEnvironmentObject] = []
     
     public var stackOrder: [UUID] {
@@ -187,47 +188,57 @@ public class Router {
             print("Error: Active navigation controller not found")
             return
         }
-        
-        // Check if the route's screenType exists in the current stack
+
+        // Check if the target route's view controller already exists in the stack
         if let targetViewController = navigationController.viewControllers.first(where: { viewController in
             if let hostingController = viewController as? IdentifiableHostingController<AnyView> {
                 return hostingController.screenType == route.routeConfig.path
             }
             return false
         }) {
-            // Pop to the existing view controller
+            // Popping to an existing view controller
+            navigationController.delegate = navigationDelegate
             navigationController.popToViewController(targetViewController, animated: true)
+
+            // Reset delegate after the pop animation completes
+            navigationController.transitionCoordinator?.animate(alongsideTransition: nil, completion: { _ in
+                navigationController.delegate = nil
+            })
+
             print("Popped to the existing view controller for route \(route.routeConfig.path)")
         } else {
-            // If not found, navigate to the route with a pop-like animation
-            navigateToRouteWithPopAnimation(route, in: navigationController)
+            // Handle cases where the view controller for the route doesn't exist
+            print("Error: Target view controller for route \(route.routeConfig.path) not found in the stack")
+            
+            // Resolve the view for the route
+            guard let view = resolver.resolveView(for: route.routeConfig) else {
+                print("Error: No view found for route \(route.routeConfig.path)")
+                return
+            }
+
+            // Inject environment objects into the view
+            let viewWithEnvironment = injectEnvironmentObjects(into: view)
+
+            // Create a hosting controller for the new view
+            let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: route.routeConfig.path)
+
+            // Set up the custom delegate for navigation animations
+            let animator = RouterNavigationAnimator()
+            animator.popStyle = true // Simulate a "pop" animation
+            navigationDelegate.animator = animator
+            navigationController.delegate = navigationDelegate
+
+            // Push the new view controller with a custom "pop-like" animation
+            navigationController.pushViewController(hostingController, animated: true)
+
+            // Reset delegate after the push animation completes
+            navigationController.transitionCoordinator?.animate(alongsideTransition: nil, completion: { _ in
+                navigationController.delegate = nil
+            })
+
+            print("Navigated to a new view controller for route \(route.routeConfig.path) with a pop-like animation")
         }
     }
-
-    private func navigateToRouteWithPopAnimation(_ route: Route, in navigationController: UINavigationController) {
-        // Resolve the view for the route
-        guard let view = resolver.resolveView(for: route.routeConfig) else {
-            print("Error: No view found for route \(route.routeConfig.path)")
-            return
-        }
-
-        // Inject environment objects into the view
-        let viewWithEnvironment = injectEnvironmentObjects(into: view)
-
-        // Create a hosting controller for the new view
-        let hostingController = IdentifiableHostingController(rootView: viewWithEnvironment, screenType: route.routeConfig.path)
-        
-        // Push the new view controller onto the stack with a pop-like animation
-        let transition = CATransition()
-        transition.type = .push
-        transition.subtype = .fromLeft // Mimic a pop animation by sliding from left
-        transition.duration = 0.3
-        navigationController.view.layer.add(transition, forKey: kCATransition)
-        
-        navigationController.pushViewController(hostingController, animated: false)
-        print("Navigated to a new view controller for route \(route.routeConfig.path) with pop-like animation")
-    }
-
     
     private func setHostingControllerAsRoot(with view: some View, screenType: String, in navigationController: UINavigationController) {
         let hostingController = IdentifiableHostingController(rootView: AnyView(view), screenType: screenType)
